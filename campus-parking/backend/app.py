@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import qrcode
 import os
@@ -21,18 +21,19 @@ class ParkingSlot(db.Model):
 # Initialize database
 with app.app_context():
     db.create_all()
-    # Create slots if not exist
     default_slots = ["A1", "A2", "B1", "B2", "C1"]
     for s in default_slots:
         if not ParkingSlot.query.filter_by(slot_id=s).first():
             db.session.add(ParkingSlot(slot_id=s))
     db.session.commit()
 
+# Home Page
 @app.route('/')
 def home():
     slots = ParkingSlot.query.all()
     return render_template('index.html', slots=slots)
 
+# Book a Slot (UI)
 @app.route('/book/<slot_id>')
 def book_slot(slot_id):
     slot = ParkingSlot.query.filter_by(slot_id=slot_id).first()
@@ -47,6 +48,7 @@ def book_slot(slot_id):
         db.session.commit()
     return redirect(url_for('home'))
 
+# Release a Slot (UI)
 @app.route('/release/<slot_id>')
 def release_slot(slot_id):
     slot = ParkingSlot.query.filter_by(slot_id=slot_id).first()
@@ -55,11 +57,57 @@ def release_slot(slot_id):
         db.session.commit()
     return redirect(url_for('home'))
 
+# Admin Dashboard
 @app.route('/admin')
 def admin_dashboard():
     slots = ParkingSlot.query.all()
     return render_template('admin.html', slots=slots)
 
+# ✅ API ENDPOINTS for React Frontend
+
+# Get all slots
+@app.route('/api/slots', methods=['GET'])
+def get_slots():
+    slots = ParkingSlot.query.all()
+    result = [{"slot_id": s.slot_id, "booking_id": s.booking_id} for s in slots]
+    return jsonify(result)
+
+# Create booking
+@app.route('/api/book', methods=['POST'])
+def api_book_slot():
+    data = request.json
+    slot_id = data.get("slot_id")
+    slot = ParkingSlot.query.filter_by(slot_id=slot_id).first()
+    if not slot:
+        return jsonify({"error": "Invalid slot"}), 400
+    if slot.booking_id:
+        return jsonify({"error": "Slot already booked"}), 400
+
+    booking_id = str(uuid.uuid4())[:8]
+    slot.booking_id = booking_id
+    db.session.commit()
+    return jsonify({"slot_id": slot_id, "booking_id": booking_id})
+
+# Release booking
+@app.route('/api/release', methods=['POST'])
+def api_release_slot():
+    data = request.json
+    slot_id = data.get("slot_id")
+    slot = ParkingSlot.query.filter_by(slot_id=slot_id).first()
+    if not slot:
+        return jsonify({"error": "Invalid slot"}), 400
+    if not slot.booking_id:
+        return jsonify({"error": "Slot is not booked"}), 400
+
+    slot.booking_id = None
+    db.session.commit()
+    return jsonify({"message": f"Slot {slot_id} released"})
+
+# Parking Page
+@app.route('/parking')
+def parking_page():
+    slots = ParkingSlot.query.all()
+    return render_template('parking.html', slots=slots)
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
-

@@ -5,6 +5,12 @@
   <title>Campus Parking Management</title>
 </head>
 <body>
+  <nav style="background-color:#333; color:white; padding:10px;">
+    <a href="{{ url_for('home') }}" style="color:white; margin-right:15px;">Home</a>
+    <a href="{{ url_for('parking_page') }}" style="color:white; margin-right:15px;">Parking</a>
+    <a href="{{ url_for('admin_dashboard') }}" style="color:white;">Admin</a>
+  </nav>
+
   <h1>Campus Parking Management</h1>
   <p>Select a parking slot below:</p>
 
@@ -29,6 +35,9 @@
     </tr>
     {% endfor %}
   </table>
+
+  <br>
+    <a href="{{ url_for('parking_page') }}">Parking Overview</a>
 
   <br>
   <a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Campus Parking - User</title>
+</head>
+<body>
+  <h1>Campus Parking Management</h1>
+  <p>Select a parking slot below:</p>
+  <table border="1">
+    <tr>
+      <th>Slot</th><th>Status</th><th>Action</th>
+    </tr>
+    {% for slot, booking in slots.items() %}
+      <tr>
+        <td>{{ slot }}</td>
+        <td>{{ 'Available' if not booking else 'Booked' }}</td>
+        <td>
+          {% if not booking %}
+            <a href="/book/{{ slot }}">Book</a>
+          {% else %}
+            <a href="/release/{{ slot }}">Release</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  <p><a href="/admin">Admin Dashboard</a></p>
+</body>
+</html>

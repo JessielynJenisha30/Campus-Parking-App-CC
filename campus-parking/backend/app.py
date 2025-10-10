@@ -31,8 +31,9 @@ def release_slot(slot_id):
 
 @app.route("/admin")
 def admin_dashboard():
-    return render_template("admin.html")
+    return render_template("admin.html", slots=parking_slots)
+
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=8000,debug=True)

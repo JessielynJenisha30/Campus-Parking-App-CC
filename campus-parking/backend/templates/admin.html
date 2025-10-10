@@ -1,18 +1,30 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Admin Dashboard - Campus Parking</title>
 </head>
 <body>
   <h1>Admin Dashboard</h1>
-  <p>QR codes for booked slots:</p>
-  <ul>
-    {% for slot, booking in slots.items() %}
-      {% if booking %}
-        <li>{{ slot }} - <img src="{{ url_for('static', filename='qr_codes/' + booking + '.png') }}" width="100"></li>
-      {% endif %}
+  <p>Monitor and manage parking slots:</p>
+
+  <table border="1" cellpadding="10">
+    <tr>
+      <th>Slot ID</th>
+      <th>Status</th>
+      <th>Booking ID</th>
+    </tr>
+
+    {% for slot in slots %}
+    <tr>
+      <td>{{ slot.slot_id }}</td>
+      <td>{{ "Booked" if slot.booking_id else "Available" }}</td>
+      <td>{{ slot.booking_id if slot.booking_id else "N/A" }}</td>
+    </tr>
     {% endfor %}
-  </ul>
-  <a href="/">Back to User View</a>
+  </table>
+
+  <br>
+  <a href="{{ url_for('home') }}">Back to Home</a>
 </body>
 </html>

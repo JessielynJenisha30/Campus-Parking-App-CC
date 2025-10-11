@@ -29,4 +29,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend_dist
-          path: campus-parking/frontend/my-app/build
+          path: campus-parking/frontend/my-app/dist
+          

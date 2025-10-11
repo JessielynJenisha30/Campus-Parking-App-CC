@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Parking Slots</title>
+</head>
+<body>
+    <h1>Parking Slot Details</h1>
+    <table border="1">
+        <tr>
+            <th>Slot</th>
+            <th>Status</th>
+            <th>QR Code</th>
+        </tr>
+        {% for slot in slots %}
+        <tr>
+            <td>{{ slot.slot_id }}</td>
+            <td>{{ "Booked" if slot.booking_id else "Available" }}</td>
+            <td>
+                {% if slot.booking_id %}
+                    <img src="{{ url_for('static', filename='qr_codes/' + slot.booking_id + '.png') }}" width="100">
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

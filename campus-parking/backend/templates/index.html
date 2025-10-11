@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Campus Parking Management</title>
+</head>
+<body>
+  <nav style="background-color:#333; color:white; padding:10px;">
+    <a href="{{ url_for('home') }}" style="color:white; margin-right:15px;">Home</a>
+    <a href="{{ url_for('parking_page') }}" style="color:white; margin-right:15px;">Parking</a>
+    <a href="{{ url_for('admin_dashboard') }}" style="color:white;">Admin</a>
+  </nav>
+
+  <h1>Campus Parking Management</h1>
+  <p>Select a parking slot below:</p>
+
+  <table border="1" cellpadding="10">
+    <tr>
+      <th>Slot</th>
+      <th>Status</th>
+      <th>Action</th>
+    </tr>
+
+    {% for slot in slots %}
+    <tr>
+      <td>{{ slot.slot_id }}</td>
+      <td>{{ "Booked" if slot.booking_id else "Available" }}</td>
+      <td>
+        {% if slot.booking_id %}
+          <a href="{{ url_for('release_slot', slot_id=slot.slot_id) }}">Release</a>
+        {% else %}
+          <a href="{{ url_for('book_slot', slot_id=slot.slot_id) }}">Book</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <br>
+    <a href="{{ url_for('parking_page') }}">Parking Overview</a>
+
+  <br>
+  <a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
+</body>
+</html>

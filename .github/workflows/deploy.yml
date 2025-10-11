@@ -1,39 +1,36 @@
-name: CI/CD — Build & deploy (Flask) to Azure Web App (Publish Profile)
+name: Deploy to Azure Web App
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: '3.9'
 
       - name: Install dependencies
+        working-directory: campus-parking/backend   # 👈 this tells it where to look
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests (optional)
-        run: |
-          pytest -q || true
-
       - name: Zip app for deployment
-        run: |
-          # create a zip excluding git/CI files
-          zip -r app.zip . -x ".git/*" ".github/*" "__pycache__/*" "*.pyc"
+        working-directory: campus-parking/backend
+        run: zip -r app.zip .
 
-      - name: Deploy to Azure Web App (using publish profile)
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
-          app-name: campus-parking-webapp            # change if your app name differs
+          app-name: campus-parking-webapp
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: app.zip
+          package: campus-parking/backend/app.zip

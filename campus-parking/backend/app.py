@@ -63,7 +63,7 @@ def admin_dashboard():
     slots = ParkingSlot.query.all()
     return render_template('admin.html', slots=slots)
 
-# ✅ API ENDPOINTS for React Frontend
+# API ENDPOINTS for React Frontend
 
 # Get all slots
 @app.route('/api/slots', methods=['GET'])

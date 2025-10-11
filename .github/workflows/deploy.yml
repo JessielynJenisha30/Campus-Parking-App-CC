@@ -1,16 +1,16 @@
-name: Deploy to Azure Web App
+name: Deploy Flask Backend to Azure Web App
 
 on:
   push:
     branches:
-      - main
+      - main  # or whichever branch you deploy from
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -18,19 +18,25 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install dependencies
-        working-directory: campus-parking/backend   # 👈 this tells it where to look
+      - name: Install backend dependencies
+        working-directory: campus-parking/backend
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Zip app for deployment
+      - name: Prepare backend package for deployment
         working-directory: campus-parking/backend
-        run: zip -r app.zip .
+        run: |
+          zip -r backend.zip . -x "__pycache__/*" "*.pyc" "*.pyo" "venv/*"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
-          app-name: campus-parking-webapp
+          app-name: campus-parking-webapp    # your Azure App Service name
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: campus-parking/backend/app.zip
+          package: campus-parking/backend/backend.zip
+
+      - name: Verify deployment
+        run: |
+          echo "Deployment completed! Visit your site at:"
+          echo "https://campus-parking-webapp.azurewebsites.net"

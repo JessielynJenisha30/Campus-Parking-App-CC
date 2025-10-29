@@ -1,423 +1,312 @@
-import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import Cookies from 'js-cookie'
+import { useEffect, useState } from "react";
+import Cookies from "js-cookie";
+import { useNavigate } from "react-router-dom";
+import { QRCodeCanvas } from "qrcode.react";
 
-function Dashboard() {
-  const navigate = useNavigate()
-  const [userInfo, setUserInfo] = useState({
-    username: '',
-    email: ''
-  })
-  const [parkingSlots, setParkingSlots] = useState({})
-  const [showBookingModal, setShowBookingModal] = useState(false)
-  const [selectedSlot, setSelectedSlot] = useState(null)
-  const [bookingForm, setBookingForm] = useState({
-    vehicleNumber: '',
-    parkingTime: '',
-    duration: '',
-    currentTime: ''
-  })
-  const [myBookings, setMyBookings] = useState([])
-  const [showBookings, setShowBookings] = useState(false)
-  const [showParkingInfo, setShowParkingInfo] = useState(false)
+export default function Dashboard() {
+  const user = JSON.parse(Cookies.get("user") || "{}");
+  const navigate = useNavigate();
 
-  // Initialize parking slots (1-30 slots)
+  const [activeTab, setActiveTab] = useState("slots");
+  const [slots, setSlots] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [parkedTill, setParkedTill] = useState("");
+  const [notification, setNotification] = useState("");
+  const [qrModal, setQrModal] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const API_BASE = "http://192.168.1.8:5000";
+
+  async function fetchSlots() {
+    const res = await fetch(`${API_BASE}/slots`);
+    const data = await res.json();
+    setSlots(data);
+  }
+
+  async function fetchBookings() {
+    const res = await fetch(`${API_BASE}/bookings/${user.email}`);
+    const data = await res.json();
+    setBookings(data);
+  }
+
   useEffect(() => {
-    const initialSlots = {}
-    for (let i = 1; i <= 30; i++) {
-      initialSlots[i] = {
-        id: i,
-        available: true,
-        bookedBy: null,
-        vehicleNumber: null,
-        startTime: null,
-        endTime: null
+    if (activeTab === "slots") fetchSlots();
+    else fetchBookings();
+  }, [activeTab]);
+
+  async function handleBook(e) {
+    e.preventDefault();
+    setLoading(true);
+    setNotification("");
+
+    const bookingData = {
+      slot_no: selectedSlot,
+      name: user.name,
+      vehicle_number: vehicleNumber,
+      parked_at: new Date().toISOString(),
+      parked_till: parkedTill,
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/book`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bookingData),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setNotification(`✅ Booked ${data.slot_no} until ${data.parked_till}`);
+        setSelectedSlot(null);
+        setVehicleNumber("");
+        setParkedTill("");
+        fetchSlots();
+      } else {
+        setNotification(`❌ ${data.message || "Booking failed"}`);
       }
+    } catch (err) {
+      setNotification("❌ Network or Server Error");
+    } finally {
+      setLoading(false);
     }
-    setParkingSlots(initialSlots)
-    
-    // Load existing bookings from localStorage
-    const savedBookings = localStorage.getItem(`bookings_${userInfo.username}`)
-    if (savedBookings) {
-      setMyBookings(JSON.parse(savedBookings))
-    }
-  }, [userInfo.username])
-
-  useEffect(() => {
-    // Check if user is authenticated
-    const isAuthenticated = Cookies.get('isAuthenticated')
-    const username = Cookies.get('username')
-    const email = Cookies.get('email')
-
-    if (!isAuthenticated || !username) {
-      // Redirect to login if not authenticated
-      navigate('/login')
-      return
-    }
-
-    // Set user info from cookies
-    setUserInfo({
-      username,
-      email
-    })
-  }, [navigate])
+  }
 
   const handleLogout = () => {
-    // Clear all cookies
-    Cookies.remove('username')
-    Cookies.remove('email')
-    Cookies.remove('isAuthenticated')
-    Cookies.remove('isAdmin')
-    
-    // Navigate to login
-    navigate('/login')
-  }
-
-  const handleSlotClick = (slotId) => {
-    if (parkingSlots[slotId].available) {
-      setSelectedSlot(slotId)
-      setShowBookingModal(true)
-      // Set current time
-      const now = new Date()
-      setBookingForm({
-        vehicleNumber: '',
-        parkingTime: '',
-        duration: '',
-        currentTime: now.toLocaleString()
-      })
-    }
-  }
-
-  const handleBookingSubmit = (e) => {
-    e.preventDefault()
-    
-    if (!bookingForm.vehicleNumber || !bookingForm.parkingTime || !bookingForm.duration) {
-      alert('Please fill in all fields')
-      return
-    }
-
-    // Calculate end time
-    const startTime = new Date(bookingForm.parkingTime)
-    const endTime = new Date(startTime.getTime() + (parseInt(bookingForm.duration) * 60 * 60 * 1000))
-
-    // Create booking
-    const booking = {
-      id: Date.now(),
-      slotId: selectedSlot,
-      vehicleNumber: bookingForm.vehicleNumber,
-      startTime: bookingForm.parkingTime,
-      endTime: endTime.toISOString(),
-      duration: bookingForm.duration,
-      bookingTime: bookingForm.currentTime,
-      username: userInfo.username
-    }
-
-    // Update parking slots
-    setParkingSlots(prev => ({
-      ...prev,
-      [selectedSlot]: {
-        ...prev[selectedSlot],
-        available: false,
-        bookedBy: userInfo.username,
-        vehicleNumber: bookingForm.vehicleNumber,
-        startTime: bookingForm.parkingTime,
-        endTime: endTime.toISOString()
-      }
-    }))
-
-    // Add to user bookings
-    const newBookings = [...myBookings, booking]
-    setMyBookings(newBookings)
-    localStorage.setItem(`bookings_${userInfo.username}`, JSON.stringify(newBookings))
-
-    // Close modal and reset form
-    setShowBookingModal(false)
-    setSelectedSlot(null)
-    setBookingForm({
-      vehicleNumber: '',
-      parkingTime: '',
-      duration: '',
-      currentTime: ''
-    })
-
-    alert('Parking slot booked successfully!')
-  }
-
-  const cancelBooking = (bookingId) => {
-    const booking = myBookings.find(b => b.id === bookingId)
-    if (booking) {
-      // Free up the slot
-      setParkingSlots(prev => ({
-        ...prev,
-        [booking.slotId]: {
-          ...prev[booking.slotId],
-          available: true,
-          bookedBy: null,
-          vehicleNumber: null,
-          startTime: null,
-          endTime: null
-        }
-      }))
-
-      // Remove from bookings
-      const updatedBookings = myBookings.filter(b => b.id !== bookingId)
-      setMyBookings(updatedBookings)
-      localStorage.setItem(`bookings_${userInfo.username}`, JSON.stringify(updatedBookings))
-    }
-  }
-
-  const ParkingSlot = ({ slotId, slot }) => (
-    <div
-      onClick={() => handleSlotClick(slotId)}
-      className={`w-20 h-20 border-2 rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 ${
-        slot.available
-          ? 'border-green-500 bg-green-50 hover:bg-green-100 text-green-700'
-          : 'border-red-500 bg-red-50 text-red-700 cursor-not-allowed'
-      }`}
-    >
-      <div className="text-center">
-        <div className="font-bold text-lg">{slotId}</div>
-        <div className="text-xs">
-          {slot.available ? 'Available' : 'Occupied'}
-        </div>
-      </div>
-    </div>
-  )
-
-  const BookingModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-        <h3 className="text-xl font-semibold mb-4">Book Parking Slot #{selectedSlot}</h3>
-        <form onSubmit={handleBookingSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Vehicle Number
-              </label>
-              <input
-                type="text"
-                value={bookingForm.vehicleNumber}
-                onChange={(e) => setBookingForm({...bookingForm, vehicleNumber: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter vehicle number"
-                maxLength={20}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Parking Time
-              </label>
-              <input
-                type="datetime-local"
-                value={bookingForm.parkingTime}
-                onChange={(e) => setBookingForm({...bookingForm, parkingTime: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Duration (hours)
-              </label>
-              <select
-                value={bookingForm.duration}
-                onChange={(e) => setBookingForm({...bookingForm, duration: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Select duration</option>
-                <option value="1">1 hour</option>
-                <option value="2">2 hours</option>
-                <option value="4">4 hours</option>
-                <option value="8">8 hours</option>
-                <option value="12">12 hours</option>
-                <option value="24">24 hours</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Current Time
-              </label>
-              <input
-                type="text"
-                value={bookingForm.currentTime}
-                readOnly
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-              />
-            </div>
-          </div>
-
-          <div className="flex space-x-3 mt-6">
-            <button
-              type="button"
-              onClick={() => setShowBookingModal(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Book Slot
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
+    Cookies.remove("user");
+    navigate("/login");
+  };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Navigation Header */}
-      <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">
-                Campus Parking Dashboard
-              </h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setShowBookings(!showBookings)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-              >
-                My Bookings ({myBookings.length})
-              </button>
-              <button
-                onClick={() => setShowParkingInfo(!showParkingInfo)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
-              >
-                Parking Info
-              </button>
-              <span className="text-sm text-gray-700">
-                Welcome, <strong>{userInfo.username}</strong>
-              </span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
+    <div className="flex h-screen bg-slate-50 text-slate-700">
+      {/* Sidebar */}
+      <div className="w-64 bg-white shadow-md flex flex-col justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-cyan-600 text-center py-6 border-b">
+            Parking Dashboard
+          </h1>
+          <nav className="flex flex-col p-4 gap-3">
+            <button
+              onClick={() => setActiveTab("slots")}
+              className={`p-3 rounded-lg text-left font-medium ${
+                activeTab === "slots"
+                  ? "bg-cyan-500 text-white"
+                  : "hover:bg-cyan-100"
+              }`}
+            >
+              Available Slots
+            </button>
+            <button
+              onClick={() => setActiveTab("bookings")}
+              className={`p-3 rounded-lg text-left font-medium ${
+                activeTab === "bookings"
+                  ? "bg-cyan-500 text-white"
+                  : "hover:bg-cyan-100"
+              }`}
+            >
+              Booked Tickets
+            </button>
+          </nav>
         </div>
-      </nav>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          
-          {/* My Bookings Section */}
-          {showBookings && (
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">My Bookings</h2>
-              {myBookings.length === 0 ? (
-                <p className="text-gray-500">No bookings found.</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {myBookings.map(booking => (
-                    <div key={booking.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-semibold text-lg">Slot #{booking.slotId}</h3>
-                        <button
-                          onClick={() => cancelBooking(booking.id)}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-1">
-                        <strong>Vehicle:</strong> {booking.vehicleNumber}
-                      </p>
-                      <p className="text-sm text-gray-600 mb-1">
-                        <strong>Start:</strong> {new Date(booking.startTime).toLocaleString()}
-                      </p>
-                      <p className="text-sm text-gray-600 mb-1">
-                        <strong>Duration:</strong> {booking.duration} hours
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <strong>End:</strong> {new Date(booking.endTime).toLocaleString()}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Parking Info Section */}
-          {showParkingInfo && (
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Parking Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Parking Rules</h3>
-                  <ul className="list-disc list-inside text-gray-600 space-y-1">
-                    <li>Maximum parking duration: 24 hours</li>
-                    <li>Parking fee: $2/hour</li>
-                    <li>Late departure fee: $5/hour</li>
-                    <li>No overnight parking without permission</li>
-                    <li>Vehicles must display valid parking permit</li>
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Contact Information</h3>
-                  <p className="text-gray-600 mb-2">
-                    <strong>Parking Office:</strong> (555) 123-4567
-                  </p>
-                  <p className="text-gray-600 mb-2">
-                    <strong>Email:</strong> parking@campus.edu
-                  </p>
-                  <p className="text-gray-600">
-                    <strong>Office Hours:</strong> 8:00 AM - 6:00 PM (Mon-Fri)
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Parking Slots Matrix */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Available Parking Slots</h2>
-            
-            {/* Legend */}
-            <div className="flex items-center space-x-6 mb-6">
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-green-100 border border-green-500 rounded"></div>
-                <span className="text-sm text-gray-600">Available</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-red-100 border border-red-500 rounded"></div>
-                <span className="text-sm text-gray-600">Occupied</span>
-              </div>
-            </div>
-
-            {/* Parking Slots Grid */}
-            <div className="grid grid-cols-5 md:grid-cols-6 lg:grid-cols-10 gap-4">
-              {Object.entries(parkingSlots).map(([slotId, slot]) => (
-                <ParkingSlot key={slotId} slotId={parseInt(slotId)} slot={slot} />
-              ))}
-            </div>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-500">
-                Click on an available slot to book your parking space
-              </p>
-            </div>
-          </div>
+        {/* Logout Button */}
+        <div className="p-4 border-t">
+          <button
+            onClick={handleLogout}
+            className="w-full py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition"
+          >
+            Logout
+          </button>
         </div>
       </div>
 
-      {/* Booking Modal */}
-      {showBookingModal && <BookingModal />}
-    </div>
-  )
-}
+      {/* Main Content */}
+      <div className="flex-1 p-8 overflow-auto">
+        <h2 className="text-3xl font-semibold text-cyan-600 mb-6">
+          {activeTab === "slots" ? "Available Slots" : "Your Booked Tickets"}
+        </h2>
 
-export default Dashboard
+        {/* Notification */}
+        {notification && (
+          <div
+            className={`p-3 mb-4 rounded-lg text-center ${
+              notification.startsWith("✅")
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-red-700"
+            }`}
+          >
+            {notification}
+          </div>
+        )}
+
+        {/* Available Slots */}
+        {activeTab === "slots" && (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {slots.map((slot) => (
+              <div
+                key={slot.lot_no}
+                onClick={() =>
+                  !slot.isTaken ? setSelectedSlot(slot.lot_no) : null
+                }
+                className={`p-6 text-center rounded-xl cursor-pointer shadow-md transition ${
+                  slot.isTaken
+                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                    : "bg-cyan-100 hover:bg-cyan-200 text-cyan-800"
+                }`}
+              >
+                <p className="text-xl font-bold">{slot.lot_no}</p>
+                <p className="text-sm mt-1">
+                  {slot.isTaken ? "Occupied" : "Available"}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Booking Modal */}
+        {selectedSlot && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-xl shadow-2xl w-[400px]">
+              <h3 className="text-xl font-semibold text-cyan-600 mb-4">
+                Book Slot {selectedSlot}
+              </h3>
+              <form onSubmit={handleBook} className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium">
+                    Vehicle Number
+                  </label>
+                  <input
+                    type="text"
+                    value={vehicleNumber}
+                    onChange={(e) => setVehicleNumber(e.target.value)}
+                    required
+                    className="w-full p-2 border rounded-lg mt-1 focus:ring-2 focus:ring-cyan-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">
+                    Parked Till
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={parkedTill}
+                    onChange={(e) => setParkedTill(e.target.value)}
+                    required
+                    className="w-full p-2 border rounded-lg mt-1 focus:ring-2 focus:ring-cyan-500 outline-none"
+                  />
+                </div>
+                <div className="flex justify-end gap-3 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSlot(null)}
+                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className={`px-4 py-2 rounded-lg text-white font-semibold transition ${
+                      loading
+                        ? "bg-cyan-300 cursor-not-allowed"
+                        : "bg-cyan-500 hover:bg-cyan-600"
+                    }`}
+                  >
+                    {loading ? "Booking..." : "Confirm"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Booked Tickets */}
+        {activeTab === "bookings" && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full bg-white rounded-xl shadow-lg">
+              <thead className="bg-cyan-500 text-white">
+                <tr>
+                  <th className="py-3 px-4 text-left">Slot No</th>
+                  <th className="py-3 px-4 text-left">Vehicle</th>
+                  <th className="py-3 px-4 text-left">Parked Till</th>
+                  <th className="py-3 px-4 text-left">QR Code</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.map((b, index) => {
+                  const qrData = `http://192.168.1.8:5173/admin?slot_no=${
+                    b.slot_no
+                  }&name=${encodeURIComponent(
+                    user.name
+                  )}&parked_till=${encodeURIComponent(
+                    b.parked_till
+                  )}&vehicle_number=${encodeURIComponent(b.vehicle_number)}`;
+                  return (
+                    <tr
+                      key={index}
+                      className="border-b hover:bg-gray-50 transition"
+                    >
+                      <td className="py-3 px-4">{b.slot_no}</td>
+                      <td className="py-3 px-4">{b.vehicle_number}</td>
+                      <td className="py-3 px-4">
+                        {new Date(b.parked_till).toLocaleString()}
+                      </td>
+                      <td
+                        className="py-3 px-4 cursor-pointer"
+                        onClick={() =>
+                          setQrModal({
+                            slot_no: b.slot_no,
+                            name: user.name,
+                            parked_till: b.parked_till,
+                            vehicle_number: b.vehicle_number,
+                            qrData,
+                          })
+                        }
+                      >
+                        <QRCodeCanvas value={qrData} size={80} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* QR Modal */}
+        {qrModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-8 rounded-2xl shadow-2xl text-center relative w-[380px]">
+              <button
+                onClick={() => setQrModal(null)}
+                className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-lg"
+              >
+                ✕
+              </button>
+              <h3 className="text-2xl font-bold text-cyan-600 mb-4">
+                QR Ticket
+              </h3>
+              <QRCodeCanvas value={qrModal.qrData} size={200} />
+              <div className="mt-4 text-slate-700 text-sm space-y-1">
+                <p>
+                  <span className="font-semibold">Slot:</span>{" "}
+                  {qrModal.slot_no}
+                </p>
+                <p>
+                  <span className="font-semibold">Vehicle:</span>{" "}
+                  {qrModal.vehicle_number}
+                </p>
+                <p>
+                  <span className="font-semibold">Parked Till:</span>{" "}
+                  {new Date(qrModal.parked_till).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

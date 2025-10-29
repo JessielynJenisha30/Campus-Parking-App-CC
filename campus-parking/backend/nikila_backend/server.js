@@ -1,10 +1,46 @@
 import express from "express";
 import sql from "mssql";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 
+import cron from "node-cron";
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
+
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://192.168.1.8:5173"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
+
+
+// Run every 5 minutes
+cron.schedule("*/5 * * * *", async () => {
+  try {
+    const now = new Date();
+
+    // Delete expired bookings
+    await sql.query`
+      DELETE FROM dbo.bookings 
+      WHERE parked_till < ${now};
+    `;
+
+    // Free up the slots that were occupied
+    await sql.query`
+      UPDATE dbo.parking_slots
+      SET isTaken = 0
+      WHERE lot_no NOT IN (SELECT slot_no FROM dbo.bookings);
+    `;
+
+    console.log("🧹 Cleaned up expired bookings:", now.toISOString());
+  } catch (err) {
+    console.error("Cleanup Error:", err.message);
+  }
+});
+
 
 const dbConfig = {
   user: "CloudSA91514d09",
@@ -72,12 +108,16 @@ app.get("/slots", async (req, res) => {
 
 // -------------------- BOOK PARKING SLOT --------------------
 app.post("/book", async (req, res) => {
-  const { slot_no, name, vehicle_number, parked_at, parked_till } = req.body;
+  let { slot_no, name, vehicle_number, parked_at, parked_till } = req.body;
 
   try {
+    // Convert to Date objects
+    parked_at = new Date(parked_at);
+    parked_till = new Date(parked_till);
+
     const checkSlot = await sql.query`SELECT isTaken FROM dbo.parking_slots WHERE lot_no=${slot_no}`;
     if (checkSlot.recordset.length === 0 || checkSlot.recordset[0].isTaken)
-      return res.status(400).send("Slot not available");
+      return res.status(400).json({ message: "Slot not available" });
 
     await sql.query`
       INSERT INTO dbo.bookings (slot_no, name, vehicle_number, parked_at, parked_till)
@@ -87,9 +127,12 @@ app.post("/book", async (req, res) => {
 
     res.json({ slot_no, name, vehicle_number, parked_till });
   } catch (err) {
-    res.status(500).send(err.message);
+    console.error("Booking Error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
+
+
 
 // -------------------- VALIDATE QR CODE --------------------
 app.post("/validate", async (req, res) => {
@@ -109,5 +152,38 @@ app.post("/validate", async (req, res) => {
   }
 });
 
+// -------------------- GET USER BOOKINGS --------------------
+app.get("/bookings/:email", async (req, res) => {
+  const { email } = req.params;
+
+  try {
+    // Find user by email
+    const userResult = await sql.query`SELECT name FROM dbo.users WHERE email = ${email}`;
+    if (userResult.recordset.length === 0)
+      return res.status(404).json({ message: "User not found" });
+
+    const userName = userResult.recordset[0].name;
+
+    // Get all bookings linked to this user's name
+    const bookings = await sql.query`
+      SELECT 
+        b.slot_no, 
+        b.vehicle_number, 
+        b.parked_at, 
+        b.parked_till, 
+        p.isTaken
+      FROM dbo.bookings AS b
+      JOIN dbo.parking_slots AS p ON b.slot_no = p.lot_no
+      WHERE b.name = ${userName}
+      ORDER BY b.id DESC;
+    `;
+
+    res.json(bookings.recordset);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+
 // -------------------- SERVER START --------------------
-app.listen(5000, () => console.log("🚗 Parking Management Server running on port 5000"));
+app.listen(5000, "0.0.0.0", () => console.log("Backend running on port 5000"));

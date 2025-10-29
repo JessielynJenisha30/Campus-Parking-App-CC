@@ -4,6 +4,7 @@ import uuid
 from flask import Flask, render_template, jsonify, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 import qrcode
+from sqlalchemy import text
 
 app = Flask(__name__)
 
@@ -21,6 +22,14 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+
+try:
+    with app.app_context():
+        db.session.execute(text("SELECT 1"))
+        app.logger.info("✅ Database connection successful!")
+except Exception as e:
+    app.logger.error(f"❌ Database connection failed: {e}")
+
 
 class ParkingSlot(db.Model):
     __tablename__ = "parking_slots"
@@ -157,5 +166,6 @@ def api_get_booking(booking_id):
 def health():
     return jsonify({"status": "ok"})
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8000)), debug=True)
+#if __name__ == "__main__":
+    # Only for local testing
+    #app.run(host="0.0.0.0", port=8000, debug=True)

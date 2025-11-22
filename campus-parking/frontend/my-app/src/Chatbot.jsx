@@ -8,8 +8,9 @@ export default function Chatbot() {
   // get logged-in user from cookies
   const user = JSON.parse(Cookies.get("user") || "{}");
 
-  const BACKEND_URL =
-    process.env.REACT_APP_BACKEND_URL || "http://localhost:8080/chat";
+  // Use Vite env variables in the browser; Vite exposes variables via import.meta.env
+  // Ensure your env var is prefixed with VITE_ (for example VITE_BACKEND_URL)
+  const BACKEND_URL = "http://localhost:8080/chat";
 
   async function sendMessage(e) {
     e?.preventDefault();

@@ -11,7 +11,7 @@ const app = express();
 app.use(express.json());
 
 // ---------- CORS ----------
-const allowedOrigin = process.env.ALLOWED_ORIGIN || "http://localhost:3000";
+const allowedOrigin = process.env.ALLOWED_ORIGIN || "http://localhost:5173";
 app.use(cors({ origin: allowedOrigin }));
 
 // ---------- RATE LIMIT ----------

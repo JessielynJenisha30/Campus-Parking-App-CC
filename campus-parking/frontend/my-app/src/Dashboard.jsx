@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Cookies from "js-cookie";
 import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
+// Right-side chat panel implemented in this file. Do not modify Chatbot.jsx per request.
 
 export default function Dashboard() {
   const user = JSON.parse(Cookies.get("user") || "{}");
@@ -16,8 +17,14 @@ export default function Dashboard() {
   const [notification, setNotification] = useState("");
   const [qrModal, setQrModal] = useState(null);
   const [loading, setLoading] = useState(false);
+  // Right-side chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatText, setChatText] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatRef = useRef(null);
 
-  const API_BASE = "http://192.168.1.8:5000";
+  const API_BASE = "http://10.73.150.23:5000";
 
   async function fetchSlots() {
     const res = await fetch(`${API_BASE}/slots`);
@@ -79,6 +86,41 @@ export default function Dashboard() {
     navigate("/login");
   };
 
+  // Scroll chat to bottom when messages change
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }
+  }, [chatMessages, chatOpen]);
+
+  async function sendChat(e) {
+    e?.preventDefault();
+    const trimmed = chatText.trim();
+    if (!trimmed) return;
+
+    // add user message locally
+    setChatMessages((m) => [...m, { role: "user", text: trimmed }]);
+    setChatText("");
+    setChatLoading(true);
+
+    try {
+      const resp = await fetch("http://localhost:8080/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed, email: user.email }),
+      });
+
+      const data = await resp.json();
+      const botText = data?.reply || data?.message || "No reply from server.";
+      setChatMessages((m) => [...m, { role: "bot", text: botText }]);
+    } catch (err) {
+      console.error("Chat error:", err);
+      setChatMessages((m) => [...m, { role: "bot", text: "Error contacting server." }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
   return (
     <div className="flex h-screen bg-slate-50 text-slate-700">
       {/* Sidebar */}
@@ -119,6 +161,71 @@ export default function Dashboard() {
           >
             Logout
           </button>
+        </div>
+      </div>
+      {/* Right-side Chat Toggle & Panel */}
+      <div>
+        {/* Toggle Button (bottom-right) - only show when panel is closed */}
+        {!chatOpen && (
+          <div className="fixed right-6 bottom-6 z-50">
+            <button
+              onClick={() => setChatOpen(true)}
+              className="flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-cyan-600 to-blue-600 text-white shadow-lg hover:scale-105 transform transition"
+              aria-expanded={chatOpen}
+              aria-label="Open chat"
+            >
+              <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M7 8h10M7 12h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M21 12c0 4.97-4.03 9-9 9a9 9 0 01-8-4.99L3 21l4.01-1.01A9 9 0 1111.99 3C16.97 3 21 7.03 21 12z" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Slide-in panel */}
+        <div
+          className={`fixed top-0 right-0 h-full w-96 bg-white shadow-2xl transform transition-transform z-40 ${
+            chatOpen ? "translate-x-0" : "translate-x-full"
+          }`}
+          aria-hidden={!chatOpen}
+        >
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Campus Assistant</h3>
+                <p className="text-sm text-slate-500">Ask about parking, tickets, and policies</p>
+              </div>
+              <div>
+                <button onClick={() => setChatOpen(false)} className="text-slate-500 hover:text-slate-700">✕</button>
+              </div>
+            </div>
+
+            <div ref={chatRef} className="flex-1 overflow-auto p-4 space-y-3 bg-slate-50">
+              {chatMessages.length === 0 && (
+                <div className="text-center text-slate-500 mt-8">Hi! I'm the campus parking assistant. How can I help?</div>
+              )}
+
+              {chatMessages.map((m, i) => (
+                <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`${m.role === "user" ? "bg-cyan-500 text-white" : "bg-white text-slate-800"} max-w-[75%] p-3 rounded-lg shadow`}>{m.text}</div>
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={sendChat} className="p-4 border-t bg-white">
+              <div className="flex items-center gap-3">
+                <input
+                  value={chatText}
+                  onChange={(e) => setChatText(e.target.value)}
+                  placeholder="Ask about parking..."
+                  className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+                <button type="submit" disabled={chatLoading} className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:opacity-60">
+                  {chatLoading ? "..." : "Send"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
 
@@ -236,7 +343,7 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {bookings.map((b, index) => {
-                  const qrData = `http://192.168.1.8:5173/admin?slot_no=${
+                  const qrData = `http://10.73.150.23:5173/admin?slot_no=${
                     b.slot_no
                   }&name=${encodeURIComponent(
                     user.name

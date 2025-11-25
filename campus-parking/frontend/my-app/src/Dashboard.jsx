@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [chatLoading, setChatLoading] = useState(false);
   const chatRef = useRef(null);
 
-  const API_BASE = "http://10.73.150.23:5000";
+  const API_BASE = "https://campusparkingbackend.azurewebsites.net/";
 
   async function fetchSlots() {
     const res = await fetch(`${API_BASE}/slots`);
@@ -343,7 +343,7 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {bookings.map((b, index) => {
-                  const qrData = `http://10.73.150.23:5173/admin?slot_no=${
+                  const qrData = `https://campusparkingbackend.azurewebsites.net//admin?slot_no=${
                     b.slot_no
                   }&name=${encodeURIComponent(
                     user.name

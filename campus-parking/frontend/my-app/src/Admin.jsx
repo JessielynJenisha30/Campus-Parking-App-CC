@@ -6,7 +6,7 @@ export default function Admin() {
   const [validationResult, setValidationResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const API_BASE = "http://10.73.150.23:5000";
+  const API_BASE = "https://campusparkingbackend.azurewebsites.net/";
 
   const slot_no = searchParams.get("slot_no");
   const name = searchParams.get("name");

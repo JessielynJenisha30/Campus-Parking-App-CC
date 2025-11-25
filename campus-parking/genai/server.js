@@ -137,7 +137,7 @@ Answer:
     const result = await model.generateContent(fullPrompt);
     const reply = result.response.text();
 
-    res.json({ reply });
+    res.json({ reply });  
 
   } catch (err) {
     console.error("Chat error:", err);
